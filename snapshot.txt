@@ -1,0 +1,25 @@
+MengOS:/$ mkdir al
+Debug: Created node with name al at index 0
+Directory created successfully
+MengOS:/$ cd al
+Debug: Current directory index: 255
+Debug: Node list:
+Index 0: al (Parent: 255)
+Index 41:  (Parent: 133)
+Index 45: îºý (Parent: 172)
+Index 48: ¬ÿæÿâý (Parent: 0)
+Index 49:  (Parent: 1)
+Index 57: @P (Parent: 0)
+Index 58: ¸\ (Parent: 140)
+Index 60:  (Parent: 0)
+âþ (Parent: 214)
+Debug: Already at root, cannot go to parent
+MengOS:/$ ÿ
+
+
+
+
+
+
+
+
