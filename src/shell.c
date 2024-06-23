@@ -299,7 +299,128 @@ void mv(byte cwd, char* src, char* dst) {
 
 
 // TODO: 9. Implement cp function
-void cp(byte cwd, char* src, char* dst) {}
+void cp(byte cwd, char* src, char* dst) {
+    struct node_fs node_fs_buf;
+    struct file_metadata src_metadata;
+    struct file_metadata dst_metadata;
+    enum fs_return status;
+    int i, dst_index = -1;
+    byte target_dir_index = cwd;
+    char target_dir[64];
+    char new_filename[64];
+    int dst_len = strlen(dst);
+    int slash_index = -1;
+
+    // Initialize source metadata
+    src_metadata.parent_index = cwd;
+    strcpy(src_metadata.node_name, src);
+
+    // Read the source file
+    fsRead(&src_metadata, &status);
+
+    if (status != FS_SUCCESS) {
+        printString("cp: source file not found\n");
+        return;
+    }
+
+    // Read the filesystem nodes into memory
+    readSector(&(node_fs_buf.nodes[0]), FS_NODE_SECTOR_NUMBER);
+    readSector(&(node_fs_buf.nodes[32]), FS_NODE_SECTOR_NUMBER + 1);
+
+    // Find the last '/' to split target directory and new filename
+    for (i = dst_len - 1; i >= 0; i--) {
+        if (dst[i] == '/') {
+            slash_index = i;
+            break;
+        }
+    }
+
+    // Copy target directory and filename
+    if (slash_index > 0) {
+        // Extract target directory
+        for (i = 0; i < slash_index; i++) {
+            target_dir[i] = dst[i];
+        }
+        target_dir[slash_index] = '\0';
+
+        // Extract new filename
+        for (i = slash_index + 1; i < dst_len; i++) {
+            new_filename[i - slash_index - 1] = dst[i];
+        }
+        new_filename[dst_len - slash_index - 1] = '\0';
+
+        // Search for the target directory
+        for (i = 0; i < FS_MAX_NODE; i++) {
+            if (node_fs_buf.nodes[i].parent_index == cwd &&
+                strcmp(node_fs_buf.nodes[i].node_name, target_dir) == 1) {
+                target_dir_index = i;
+                break;
+            }
+        }
+
+        // If target directory not found, return error
+        if (i == FS_MAX_NODE) {
+            printString("cp: target directory not found\n");
+            return;
+        }
+    } else {
+        strcpy(new_filename, dst);
+    }
+
+    // Handle special cases for "/" (root directory) and "../" (parent directory)
+    if (slash_index == 0 && dst[0] == '/') {
+        target_dir_index = FS_NODE_P_ROOT;
+    } else if (slash_index == 1 && dst[0] == '.' && dst[1] == '.') {
+        target_dir_index = node_fs_buf.nodes[cwd].parent_index;
+    }
+
+    // Ensure the destination filename does not already exist in the target directory
+    for (i = 0; i < FS_MAX_NODE; i++) {
+        if (node_fs_buf.nodes[i].parent_index == target_dir_index &&
+            strcmp(node_fs_buf.nodes[i].node_name, new_filename) == 1) {
+            printString("cp: destination file already exists\n");
+            return;
+        }
+    }
+
+    // Find a free node for the new file
+    for (i = 0; i < FS_MAX_NODE; i++) {
+        if (node_fs_buf.nodes[i].node_name[0] == '\0') {
+            dst_index = i;
+            break;
+        }
+    }
+
+    if (dst_index == -1) {
+        printString("cp: no space for new file\n");
+        return;
+    }
+
+    // Initialize destination metadata
+    dst_metadata.parent_index = target_dir_index;
+    strcpy(dst_metadata.node_name, new_filename);
+    dst_metadata.filesize = src_metadata.filesize;
+    memcpy(dst_metadata.buffer, src_metadata.buffer, src_metadata.filesize);
+
+    // Write the destination file
+    fsWrite(&dst_metadata, &status);
+
+    if (status != FS_SUCCESS) {
+        printString("cp: failed to write to destination\n");
+        return;
+    }
+
+    // Update the filesystem node for the new file
+    strcpy(node_fs_buf.nodes[dst_index].node_name, new_filename);
+    node_fs_buf.nodes[dst_index].parent_index = target_dir_index;
+    node_fs_buf.nodes[dst_index].data_index = 0x00; // Assume 0x00 is for files
+
+    // Write the updated nodes back to the filesystem
+    writeSector(&(node_fs_buf.nodes[0]), FS_NODE_SECTOR_NUMBER);
+    writeSector(&(node_fs_buf.nodes[32]), FS_NODE_SECTOR_NUMBER + 1);
+
+    printString("File copied successfully\n");
+}
 
 // TODO: 10. Implement cat function
 void cat(byte cwd, char* filename) {
@@ -375,9 +496,3 @@ void mkdir(byte cwd, char* dirname) {
 
     printString("Directory created\n");
 }
-
-
-
-
-
-
